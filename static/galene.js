@@ -312,6 +312,31 @@ function setChangePassword(username) {
 }
 
 /**
+ * Generate a stable, friendly username for a user who just opened the
+ * page without typing anything.  We remember it in local storage so
+ * that the same browser keeps the same name across reconnects.
+ *
+ * @returns {string}
+ */
+function randomUsername() {
+    const key = 'galene-username';
+    try {
+        let u = window.localStorage.getItem(key);
+        if(u)
+            return u;
+    } catch(e) {
+        console.warn("Couldn't read username:", e);
+    }
+    let u = '访客-' + Math.floor(Math.random() * 9000 + 1000);
+    try {
+        window.localStorage.setItem(key, u);
+    } catch(e) {
+        console.warn("Couldn't store username:", e);
+    }
+    return u;
+}
+
+/**
  * Join a group.
  */
 async function join() {
@@ -4103,13 +4128,25 @@ async function start() {
     if(parms.has('token'))
         token = parms.get('token');
 
+    // Auto-join: pick what to enable at start.  We default to camera
+    // and microphone, which is what most users want.
+    if(parms.get('present') === 'off')
+        presentRequested = null;
+    else
+        presentRequested = 'both';
+
     if(token) {
         await serverConnect();
     } else if(groupStatus.authPortal) {
         window.location.href = groupStatus.authPortal;
     } else {
-        setVisibility('login-container', true);
-        document.getElementById('username').focus()
+        // No password, no login form: use the username from the URL if
+        // one was given, otherwise invent a friendly one.
+        let username = (parms.get('username') || '').trim();
+        if(!username)
+            username = randomUsername();
+        getInputElement('username').value = username;
+        await serverConnect();
     }
     setViewportHeight();
 }

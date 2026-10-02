@@ -1,39 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
-    <title>Galène</title>
+    <title>视频通话</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--
+      Opening the server joins the "public" group straight away.  The
+      list of public groups is still reachable at /mainpage.html.
+    -->
+    <meta http-equiv="refresh" content="0; url=/group/public/">
     <link rel="stylesheet" href="/common.css">
     <link rel="stylesheet" href="/mainpage.css">
-    <link rel="stylesheet" type="text/css" href="/galene.css"/>
-    <link rel="author" href="https://www.irif.fr/~jch/"/>
+    <script src="/goto-call.js"></script>
   </head>
-
   <body>
-  
     <div class="home">
-      <h1 id="title" class="navbar-brand">Galène</h1>
-
-      <form id="groupform">
-        <label for="group">Group:</label>
-        <input id="group" type="text" name="group" class="form-control form-control-inline" autofocus/>
-        <input id='submitbutton' type="submit" value="Join" class="btn btn-default btn-large"/><br/>
-      </form>
-
-      <p id="errormessage"></p>
-  
-      <div id="public-groups" class="groups">
-        <h2>Public groups</h2>
-  
-        <table id="public-groups-table"></table>
-      </div>
+      <h1 id="title">正在进入视频通话…</h1>
+      <p>如果没有自动跳转，请点击 <a href="/group/public/">这里</a>。</p>
     </div>
-    <footer class="signature">
-      <p><a href="https://galene.org/">Galène</a> by <a href="https://www.irif.fr/~jch/" rel="author">Juliusz Chroboczek</a></p>
-    </footer>
-    
-    <script src="/mainpage.js" defer></script>
-    
   </body>
 </html>
