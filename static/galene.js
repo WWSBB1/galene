@@ -675,14 +675,14 @@ function getMaxVideoThroughput() {
     case 'lowest':
         return 150000;
     case 'low':
-        return 300000;
+        return 600000;
     case 'normal':
-        return 700000;
+        return 2500000;
     case 'unlimited':
         return null;
     default:
         console.error('Unknown video quality', v);
-        return 700000;
+        return 2500000;
     }
 }
 
@@ -1479,7 +1479,11 @@ async function addLocalMedia(localId) {
             video.width = { min: 640, ideal: 1920 };
             video.height = { min: 400, ideal: 1080 };
         } else {
-            video.aspectRatio = { ideal: 4/3 };
+            // Ask for a decent resolution.  We use "ideal" rather than
+            // "exact" so that cameras that can't do it still work.
+            video.width = { ideal: 1280 };
+            video.height = { ideal: 720 };
+            video.frameRate = { ideal: 30 };
         }
     }
 
@@ -1765,7 +1769,10 @@ function reconsiderDownRate(id) {
             throw new Error("No media for stream");
         let w = media.scrollWidth;
         let h = media.scrollHeight;
-        if(w && h && w * h <= 320 * 240) {
+        // Only drop to the low-quality simulcast layer when the video
+        // is really tiny.  The old threshold of 320x240 was far too
+        // aggressive and made ordinary layouts look blurry.
+        if(w && h && w * h <= 200 * 150) {
             low = true;
         }
     }
