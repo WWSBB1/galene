@@ -552,6 +552,11 @@ function setButtonsVisibility() {
     setVisibility('simulcastform', canPresent);
 
     setVisibility('collapse-video', mediacount && mobilelayout);
+
+    // The camera switch button is shown whenever there is a local
+    // camera stream, so that it stays available without having to open
+    // a menu.
+    setVisibility('switchcamera', local && canPresent);
 }
 
 /**
@@ -582,6 +587,8 @@ getSelectElement('videoselect').onchange = function(e) {
     if(!(this instanceof HTMLSelectElement))
         throw new Error('Unexpected type for this');
     updateSettings({video: this.value});
+    // Picking a camera explicitly overrides the front/back preference.
+    delSetting('facingMode');
     replaceCameraStream();
 };
 
@@ -1241,7 +1248,7 @@ async function replaceUpStream(c) {
     }
 
     await setMedia(cn,
-                   cn.label === 'camera' && getSettings().mirrorView,
+                   cn.label === 'camera' && shouldMirror(cn),
                    cn.label === 'video' && media);
 
     return cn;
@@ -1274,6 +1281,178 @@ function replaceCameraStream() {
 }
 
 /**
+ * Decide whether the local camera picture should be mirrored.
+ *
+ * A front camera is mirrored, the way a bathroom mirror does and the
+ * way every video-conferencing app does it, so that raising your right
+ * hand appears on the right.  A back camera is never mirrored, since it
+ * points at the world rather than at you.
+ *
+ * If the Browser tells us which camera is in use we believe it;
+ * otherwise we fall back to the cameras' labels, and finally to the
+ * user's "Mirror view" setting.
+ *
+ * @param {Stream} c
+ * @returns {boolean}
+ */
+function shouldMirror(c) {
+    let settings = getSettings();
+
+    // What the track itself reports is the ground truth: it tells us
+    // which camera is actually streaming right now.
+    let track = c && c.stream && c.stream.getVideoTracks
+        ? c.stream.getVideoTracks()[0]
+        : null;
+    if(track && track.getSettings) {
+        let st = track.getSettings();
+        if(st && st.facingMode)
+            return st.facingMode === 'user';
+    }
+
+    // Phones: remember what we asked for when we last switched.
+    if(settings.facingMode)
+        return settings.facingMode === 'user';
+
+    // Fall back to the camera's label.
+    if(settings.video) {
+        let front = labelOfCamera(settings.video);
+        if(front !== null)
+            return front;
+    }
+
+    // Nothing to go on: honour the user's preference.
+    return !!settings.mirrorView;
+}
+
+/**
+ * Look up a camera's label from its deviceId.  We remember the labels
+ * seen in the camera menu, so this doesn't need to be asynchronous.
+ *
+ * @param {string} deviceId
+ * @returns {boolean|null} true if front-facing, false if back-facing,
+ *   null if we cannot tell
+ */
+function labelOfCamera(deviceId) {
+    let select = getSelectElement('videoselect');
+    for(let i = 0; i < select.children.length; i++) {
+        let o = select.children[i];
+        if(o instanceof HTMLOptionElement && o.value === deviceId) {
+            let l = (o.label || '').toLowerCase();
+            if(/back|rear|environment|后置|背面|后面/.test(l))
+                return false;
+            if(/front|user|face|前置|正面|前面/.test(l))
+                return true;
+            return null;
+        }
+    }
+    return null;
+}
+
+/**
+ * Return the list of video input devices, in the order in which they
+ * are enumerated by the browser.
+ *
+ * @returns {Promise<Array<MediaDeviceInfo>>}
+ */
+async function cameraDevices() {
+    if(!('mediaDevices' in navigator))
+        return [];
+    try {
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        return devices.filter(d => d.kind === 'videoinput');
+    } catch(e) {
+        console.error(e);
+        return [];
+    }
+}
+
+/**
+ * Guess whether a camera is facing the user.  Browsers don't expose
+ * this directly, so we rely on the labels, which are only available
+ * once the user has granted camera permission.
+ *
+ * @param {MediaDeviceInfo} d
+ * @returns {boolean|null} null when we can't tell
+ */
+function isFrontCamera(d) {
+    let l = (d.label || '').toLowerCase();
+    if(!l)
+        return null;
+    if(/back|rear|environment|后置|背面|后面/.test(l))
+        return false;
+    if(/front|user|face|前置|正面|前面/.test(l))
+        return true;
+    return null;
+}
+
+/**
+ * Switch to the next camera.  On phones this flips between the front
+ * and the back camera; on computers it cycles through the available
+ * cameras.
+ */
+async function switchCamera() {
+    let button = document.getElementById('switchcamera');
+    if(button)
+        button.classList.add('spinning');
+    try {
+        let devices = await cameraDevices();
+        if(devices.length < 2) {
+            displayMessage('只有一个摄像头，无法切换。');
+            return;
+        }
+
+        let settings = getSettings();
+
+        // Work out which way the current camera faces.  On phones we
+        // prefer facingMode, which is what the browser understands
+        // best; otherwise we fall back to looking at the labels.
+        let facing = settings.facingMode || null;
+        if(!facing) {
+            let cur = devices.find(d => d.deviceId === settings.video);
+            if(cur) {
+                let front = isFrontCamera(cur);
+                if(front !== null)
+                    facing = front ? 'user' : 'environment';
+            }
+        }
+
+        // Phones: flip between front and back.  Computers: cycle.
+        let next = null;
+        if(facing) {
+            let want = facing === 'user' ? 'environment' : 'user';
+            next = devices.find(d => {
+                let front = isFrontCamera(d);
+                return front !== null && front === (want === 'user');
+            });
+            if(next) {
+                updateSettings({facingMode: want, video: next.deviceId});
+                getSelectElement('videoselect').value = next.deviceId;
+                replaceCameraStream();
+                return;
+            }
+        }
+
+        // No usable facing information: cycle through the cameras.
+        let i = devices.findIndex(d => d.deviceId === settings.video);
+        next = devices[(i + 1) % devices.length];
+        updateSettings({video: next.deviceId});
+        delSetting('facingMode');
+        getSelectElement('videoselect').value = next.deviceId;
+        replaceCameraStream();
+    } finally {
+        setTimeout(() => {
+            if(button)
+                button.classList.remove('spinning');
+        }, 500);
+    }
+}
+
+document.getElementById('switchcamera').onclick = function(e) {
+    e.preventDefault();
+    switchCamera();
+};
+
+/**
  * @param {string} [localId]
  */
 async function addLocalMedia(localId) {
@@ -1282,7 +1461,14 @@ async function addLocalMedia(localId) {
     /** @type{boolean|MediaTrackConstraints} */
     let audio = settings.audio ? {deviceId: settings.audio} : false;
     /** @type{boolean|MediaTrackConstraints} */
-    let video = settings.video ? {deviceId: settings.video} : false;
+    let video = false;
+    if(settings.facingMode) {
+        // On phones, selecting by facingMode is the only reliable way
+        // of flipping between the front and the back camera.
+        video = {facingMode: {ideal: settings.facingMode}};
+    } else if(settings.video) {
+        video = {deviceId: settings.video};
+    }
 
     if(video) {
         let resolution = settings.resolution;
@@ -1346,7 +1532,7 @@ async function addLocalMedia(localId) {
 
     try {
         await setUpStream(c, stream);
-        await setMedia(c, settings.mirrorView);
+        await setMedia(c, shouldMirror(c));
     } catch(e) {
         console.error(e);
         displayError(e);

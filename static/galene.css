@@ -459,6 +459,44 @@ textarea.form-reply {
     cursor: pointer;
 }
 
+/* Small floating button to switch between front and back camera.
+   Kept unobtrusive so that it doesn't get in the way of the video. */
+.switch-camera-btn {
+    display: block;
+    z-index: 1002;
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    line-height: 34px;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    color: #eaeaea;
+    font-size: 0.95em;
+    cursor: pointer;
+    opacity: 0.75;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.switch-camera-btn:hover,
+.switch-camera-btn:active {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.switch-camera-btn.spinning i {
+    animation: switch-camera-spin 0.5s linear;
+}
+
+@keyframes switch-camera-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(180deg); }
+}
+
 .chat-btn .icon-chat {
     color: #cac7c7;
     height: 50px;
